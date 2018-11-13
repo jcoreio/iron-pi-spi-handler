@@ -1,6 +1,7 @@
 // @flow
 
 import assert from 'assert'
+// $FlowFixMe: wiring-pi only installs on ARM / Linux
 import wpi from 'wiring-pi'
 
 const EEPROM_I2C_ADDR = 0x50
