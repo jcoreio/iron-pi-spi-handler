@@ -3,5 +3,6 @@ coverage
 .nyc_output
 index.js
 index.js.flow
+lib
 **/node_modules
 .eslintcache
