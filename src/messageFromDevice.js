@@ -23,6 +23,8 @@ function decodeBits({buf, pos, count}: {buf: Buffer, pos: number, count: number}
 
 export function decodeDeviceInputState({device, buf}: {device: IronPiDetectedDevice, buf: Buffer}): IronPiStateFromDevice {
   const {address, info} = device
+  // Discard one dummy byte
+  buf = buf.slice(1)
   if (buf.length < MESSAGE_FROM_DEVICE_OVERHEAD)
     throw Error(`length is too short: got ${buf.length}, expected ${MESSAGE_FROM_DEVICE_OVERHEAD} or more`)
   const preamble = buf.readUInt8(0)
