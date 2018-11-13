@@ -27,7 +27,6 @@
     "codecov": "nyc report --reporter=text-lcov > coverage.lcov; codecov",
     "commitmsg": "commitlint -e $GIT_PARAMS",
     "precommit": "npm run lint && flow",
-    "prepush": "npm test",
     "prepublishOnly": "npm run clean && npm run lint && flow && npm test && npm run build",
     "open:coverage": "open coverage/lcov-report/index.html",
     "semantic-release": "semantic-release"
