@@ -111,9 +111,10 @@ async function serviceBus(opts: {detect?: ?boolean} = {}): Promise<void> {
 
       const response: Buffer = await doSPITransaction(deviceRequestMessage)
       try {
-        statesFromDevices.push(decodeDeviceInputState({device, buf: response}))
+        statesFromDevices.push(decodeDeviceInputState({device, buf: response, detect}))
       } catch (err) {
-        console.error(`could not decode response from device ${address}: ${err.message}`)
+        if (!detect)
+          console.error(`could not decode response from device ${address}: ${err.message}`)
       }
     }
   }

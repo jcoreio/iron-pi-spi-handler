@@ -21,7 +21,11 @@ function decodeBits({buf, pos, count}: {buf: Buffer, pos: number, count: number}
   return arr
 }
 
-export function decodeDeviceInputState({device, buf}: {device: IronPiDetectedDevice, buf: Buffer}): IronPiStateFromDevice {
+export function decodeDeviceInputState({device, buf, detect}: {
+  device: IronPiDetectedDevice,
+  buf: Buffer,
+  detect?: ?boolean,
+}): IronPiStateFromDevice {
   const {address, info} = device
   // Discard one dummy byte
   buf = buf.slice(1)
@@ -34,10 +38,13 @@ export function decodeDeviceInputState({device, buf}: {device: IronPiDetectedDev
   if (buf.length < minLen)
     throw Error(`message is truncated: got length ${buf.length}, expected ${minLen}`)
 
-  // Checksum calculation begins at byte 3
-  const expectedXRC = calcChecksum(buf.slice(3, len + 3))
-  const actualXRC = buf.readUInt8(len + 3)
-  assert.strictEqual(actualXRC, expectedXRC, `xrc mismatch from device ${address}: got ${actualXRC}, expected ${expectedXRC}`)
+  if (!detect) {
+    // Allow checksum mismatches if we're just trying to detect whether a device is present
+    // Checksum calculation begins at byte 3
+    const expectedXRC = calcChecksum(buf.slice(3, len + 3))
+    const actualXRC = buf.readUInt8(len + 3)
+    assert.strictEqual(actualXRC, expectedXRC, `xrc mismatch from device ${address}: got ${actualXRC}, expected ${expectedXRC}`)
+  }
 
   const actualAddr = buf.readUInt8(3)
   assert.strictEqual(actualAddr, address, `device address mismatch: got ${actualAddr}, expected ${address}`)
