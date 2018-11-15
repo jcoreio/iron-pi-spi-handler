@@ -1,6 +1,7 @@
 coverage
+.eslintcache
 .idea
 .nyc_output
 lib
 **/node_modules
-.eslintcache
+package-lock.json
