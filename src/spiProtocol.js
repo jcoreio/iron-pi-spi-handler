@@ -1,6 +1,6 @@
 // @flow
 
-import type {IronPiDeviceModel} from './ipcCodec'
+import type {DeviceModel} from '@jcoreio/iron-pi-ipc-codec'
 
 /**
  * 1 byte preamble
@@ -22,14 +22,14 @@ export const MESSAGE_FROM_DEVICE_OVERHEAD = 5
  * Analog Input States: Num Analog Inputs * 2
  * Connect button state: 1 if button is present, 0 otherwise
  */
-export function deviceInputStatePayloadLen(modelInfo: IronPiDeviceModel): number {
-  const {numDigitalInputs, numDigitalOutputs, numAnalogInputs, hasConnectButton} = modelInfo
+export function deviceInputStatePayloadLen(deviceModel: DeviceModel): number {
+  const {numDigitalInputs, numDigitalOutputs, numAnalogInputs, hasConnectButton} = deviceModel
   return 1 + Math.ceil(numDigitalInputs / 8) + Math.ceil(numDigitalOutputs / 8) +
     numDigitalInputs + (numAnalogInputs * 2) + (hasConnectButton ? 1 : 0)
 }
 
-export function deviceSPITransactionRequiredLen(modelInfo: IronPiDeviceModel): number {
-  return MESSAGE_FROM_DEVICE_OVERHEAD + 1 + deviceInputStatePayloadLen(modelInfo)
+export function deviceSPITransactionRequiredLen(deviceModel: DeviceModel): number {
+  return MESSAGE_FROM_DEVICE_OVERHEAD + 1 + deviceInputStatePayloadLen(deviceModel)
 }
 
 export const SPI_COLOR_GREEN = 1

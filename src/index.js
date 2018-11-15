@@ -1,54 +1,47 @@
 // @flow
 
-import assert from 'assert'
-
 import {flatten, forOwn, range} from 'lodash'
 import {MessageServer as IPCMessageServer} from 'socket-ipc'
 // $FlowFixMe: wiring-pi only installs on ARM / Linux
 import wpi from 'wiring-pi'
-import {
-  encodeJSON,
-  IPC_MSG_DEVICES_LIST,
-  IPC_MESSAGE_OVERHEAD,
-  IPC_PROTO_VERSION,
-  IPC_SOCKET_PATH,
-  IPC_MSG_SET_ALL_OUTPUTS, IPC_MSG_SET_LEDS, decodeSetLEDMessages, decodeSetAllOutputs
-} from './ipcCodec'
+import IronPiIPCCodec from '@jcoreio/iron-pi-ipc-codec'
 import type {
-  IronPiDetectedDevice,
-  IronPiHardwareInfo,
-  IronPiDeviceModel,
-  LEDMessage,
-  OutputStatesMap,
-  IronPiStateFromDevice
-} from './ipcCodec'
+  DetectedDevice,
+  DeviceInputState,
+  DeviceModel,
+  DeviceOutputState,
+  HardwareInfo,
+  LEDCommand,
+  MessageToDriver,
+} from '@jcoreio/iron-pi-ipc-codec'
 
-import {encodeDeviceOutputs, encodeLEDMessagePerDevice, encodeMessageToDevice} from './messageToDevices'
+import {encodeDeviceOutputs, encodeLEDCommandPerDevice, encodeMessageToDevice} from './messageToDevices'
 import type {MessagePerDeviceOpts} from './messageToDevices'
 import {readSerialNumberAndAccessCode} from './readSerialNumber'
 import {decodeDeviceInputState} from './messageFromDevice'
 import {MODEL_INFO_CM8, MODEL_INFO_IO16, } from './modelInfo'
 import {deviceSPITransactionRequiredLen} from './spiProtocol'
 
+const codec = new IronPiIPCCodec()
+
 const SPI_BAUD_RATE = 1000000 // 1MHz
 // const IRQ_PIN = 34
 
-const ALL_POSSIBLE_DEVICES: Array<IronPiDetectedDevice> = flatten([
+const ALL_POSSIBLE_DEVICES: Array<DetectedDevice> = flatten([
   MODEL_INFO_CM8,
   range(4).map(() => MODEL_INFO_IO16)
-]).map((info: IronPiDeviceModel, idx: number) => ({ address: idx + 1, info }))
+]).map((model: DeviceModel, idx: number) => ({ address: idx + 1, model }))
 
-const _modelsByAddress: Map<number, IronPiDetectedDevice> = new Map()
-ALL_POSSIBLE_DEVICES.forEach((device: IronPiDetectedDevice) => _modelsByAddress.set(device.address, device))
+const _modelsByAddress: Map<number, DetectedDevice> = new Map()
+ALL_POSSIBLE_DEVICES.forEach((device: DetectedDevice) => _modelsByAddress.set(device.address, device))
 
-const _ipcServer = new IPCMessageServer(IPC_SOCKET_PATH, { binary: true })
+const _ipcServer = new IPCMessageServer('/tmp/socket-iron-pi', { binary: true })
 
-let _devicesListMessage
+let _devicesListMessage: ?Buffer
+let _detectedDevices: Array<DetectedDevice> = []
 
-let _detectedDevices: Array<IronPiDetectedDevice> = []
-
-let _ledMessagesToDevices: Array<LEDMessage> = []
-let _outputsToDevices: OutputStatesMap = {}
+let _ledMessagesToDevices: Array<LEDCommand> = []
+let _outputsToDevices: Array<DeviceOutputState> = []
 let _requestInputStates: boolean = false
 let _flashLEDs: boolean = false
 
@@ -66,23 +59,23 @@ async function main(): Promise<void> {
 
 async function serviceBus(opts: {detect?: ?boolean} = {}): Promise<void> {
   const {detect} = opts
-  const perDeviceMessages: Array<MessagePerDeviceOpts> = _ledMessagesToDevices.map(encodeLEDMessagePerDevice)
+  const perDeviceMessages: Array<MessagePerDeviceOpts> = _ledMessagesToDevices.map(encodeLEDCommandPerDevice)
   _ledMessagesToDevices = []
 
   forOwn(_outputsToDevices, (outputLevels: Array<boolean>, strAddress: string) => {
     const address = parseInt(strAddress)
-    const device: ?IronPiDetectedDevice = _modelsByAddress.get(address)
+    const device: ?DetectedDevice = _modelsByAddress.get(address)
     if (device) {
       perDeviceMessages.push(encodeDeviceOutputs({
         address,
-        numOutputs: device.info.numDigitalOutputs,
+        numOutputs: device.model.numDigitalOutputs,
         outputLevels,
       }))
     }
   })
-  _outputsToDevices = {}
+  _outputsToDevices = []
 
-  const devices: Array<IronPiDetectedDevice> = detect ? ALL_POSSIBLE_DEVICES : _detectedDevices
+  const devices: Array<DetectedDevice> = detect ? ALL_POSSIBLE_DEVICES : _detectedDevices
   const requestInputStates = detect || _requestInputStates
   _requestInputStates = false
 
@@ -97,21 +90,21 @@ async function serviceBus(opts: {detect?: ?boolean} = {}): Promise<void> {
 
   await doSPITransaction(initialMessage)
 
-  const statesFromDevices: Array<IronPiStateFromDevice> = []
+  const deviceInputStates: Array<DeviceInputState> = []
   if (requestInputStates) {
     for (let deviceIdx = 0; deviceIdx < devices.length; ++deviceIdx) {
-      const device: IronPiDetectedDevice = devices[deviceIdx]
+      const device: DetectedDevice = devices[deviceIdx]
       const {address} = device
-      const nextDevice: ?IronPiDetectedDevice = deviceIdx + 1 < devices.length ? devices[deviceIdx + 1] : null
+      const nextDevice: ?DetectedDevice = deviceIdx + 1 < devices.length ? devices[deviceIdx + 1] : null
       const deviceRequestMessage: Buffer = encodeMessageToDevice({
         curAddress: address,
         nextAddress: nextDevice ? nextDevice.address : 0,
-        minLen: deviceSPITransactionRequiredLen(device.info),
+        minLen: deviceSPITransactionRequiredLen(device.model),
       })
 
       const response: Buffer = await doSPITransaction(deviceRequestMessage)
       try {
-        statesFromDevices.push(decodeDeviceInputState({device, buf: response, detect}))
+        deviceInputStates.push(decodeDeviceInputState({device, buf: response, detect}))
       } catch (err) {
         if (!detect)
           console.error(`could not decode response from device ${address}: ${err.message}`)
@@ -121,10 +114,10 @@ async function serviceBus(opts: {detect?: ?boolean} = {}): Promise<void> {
 
   if (detect) {
     _detectedDevices = ALL_POSSIBLE_DEVICES.filter(device =>
-      statesFromDevices.find((state: IronPiStateFromDevice) => state.address === device.address))
-    console.log(`detected devices:${_detectedDevices.map((device: IronPiDetectedDevice) => `\n  ${device.address}: ${device.info.model}`).join('')}`)
-  } else if (statesFromDevices.length) {
-    // _ipcServer.send()
+      deviceInputStates.find((state: DeviceInputState) => state.address === device.address))
+    console.log(`detected devices:${_detectedDevices.map((device: DetectedDevice) => `\n  ${device.address}: ${device.model.name}`).join('')}`)
+  } else if (deviceInputStates.length) {
+    _ipcServer.send(codec.encodeDeviceInputStates({inputStates: deviceInputStates}))
   }
 }
 
@@ -171,12 +164,12 @@ function serviceBusAsync() {
 
 async function createDevicesListMessage(): Promise<Buffer> {
   const { serialNumber, accessCode } = await readSerialNumberAndAccessCode()
-  const hardwareInfo: IronPiHardwareInfo = {
+  const hardwareInfo: HardwareInfo = {
     devices: _detectedDevices,
     serialNumber,
     accessCode,
   }
-  return encodeJSON({msg: IPC_MSG_DEVICES_LIST, payload: hardwareInfo})
+  return codec.encodeHardwareInfo(hardwareInfo)
 }
 
 function onIPCConnection(connection: Object) {
@@ -184,29 +177,24 @@ function onIPCConnection(connection: Object) {
     connection.send(_devicesListMessage)
 }
 
+let _flashCount = 0
+
 function onIPCMessage(event: Object) {
-  // console.log('got ipc message')
   const buf: Buffer = event.data
   try {
-    assert(buf.length >= IPC_MESSAGE_OVERHEAD, 'message is too short')
-    let pos = 0
-    const version = buf.readUInt8(pos++)
-    const msg = buf.readUInt8(pos++)
-    assert.strictEqual(version, IPC_PROTO_VERSION, `unexpected IPC protocol version: got ${version}, expected ${IPC_PROTO_VERSION}`)
-    switch (msg) {
-    case IPC_MSG_SET_ALL_OUTPUTS: {
-      const {outputs, requestInputStates, flashLEDs} = decodeSetAllOutputs(buf)
-      _outputsToDevices = outputs
-      if (requestInputStates) _requestInputStates = true
-      if (flashLEDs) _flashLEDs = true
+    const msg: MessageToDriver = codec.decodeMessageToDriver(buf)
+    const {setOutputs, setLEDs} = msg
+    if (setOutputs) {
+      _outputsToDevices = setOutputs.outputs
+      _flashLEDs = ++_flashCount >= 10
+      if (_flashLEDs)
+        _flashCount = 0
+      _requestInputStates = true
       serviceBusAsync()
-    } break
-    case IPC_MSG_SET_LEDS:
-      _ledMessagesToDevices = decodeSetLEDMessages(buf)
+    }
+    if (setLEDs) {
+      _ledMessagesToDevices = setLEDs.leds
       serviceBusAsync()
-      break
-    default:
-      throw Error(`unknown IPC message: ${msg}`)
     }
   } catch (err) {
     console.error('error handling IPC message:', err)

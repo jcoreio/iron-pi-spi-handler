@@ -2,7 +2,7 @@
 
 import assert from 'assert'
 
-import type {IronPiDetectedDevice, IronPiStateFromDevice} from './ipcCodec'
+import type {DetectedDevice, DeviceInputState} from '@jcoreio/iron-pi-ipc-codec'
 import {deviceInputStatePayloadLen, MSG_FROM_DEVICE_INPUT_STATE, MSG_FROM_DEVICE_PREAMBLE, MESSAGE_FROM_DEVICE_OVERHEAD} from './spiProtocol'
 import {calcChecksum} from "./checksum"
 
@@ -22,11 +22,11 @@ function decodeBits({buf, pos, count}: {buf: Buffer, pos: number, count: number}
 }
 
 export function decodeDeviceInputState({device, buf, detect}: {
-  device: IronPiDetectedDevice,
+  device: DetectedDevice,
   buf: Buffer,
   detect?: ?boolean,
-}): IronPiStateFromDevice {
-  const {address, info} = device
+}): DeviceInputState {
+  const {address, model} = device
   // Discard one dummy byte
   buf = buf.slice(1)
   if (buf.length < MESSAGE_FROM_DEVICE_OVERHEAD)
@@ -49,7 +49,7 @@ export function decodeDeviceInputState({device, buf, detect}: {
   const actualAddr = buf.readUInt8(3)
   assert.strictEqual(actualAddr, address, `device address mismatch: got ${actualAddr}, expected ${address}`)
 
-  const expectedPayloadLen = deviceInputStatePayloadLen(info)
+  const expectedPayloadLen = deviceInputStatePayloadLen(model)
   if (len < expectedPayloadLen)
     throw Error(`payload is too short: got ${len}, expected ${expectedPayloadLen}`)
 
@@ -57,7 +57,7 @@ export function decodeDeviceInputState({device, buf, detect}: {
   assert.strictEqual(msg, MSG_FROM_DEVICE_INPUT_STATE, `device input state message ID mismatch from ${address}: got ${msg}, expected ${MSG_FROM_DEVICE_INPUT_STATE}`)
 
   let pos = 5
-  const numDigitalIOs = info.numDigitalInputs
+  const numDigitalIOs = model.numDigitalInputs
   const numDigitalIOBytes = Math.ceil(numDigitalIOs / 8)
 
   const digitalInputs: Array<boolean> = decodeBits({buf, pos, count: numDigitalIOs})
@@ -69,18 +69,18 @@ export function decodeDeviceInputState({device, buf, detect}: {
     digitalInputEventCounts.push(buf.readUInt8(pos++))
   }
   const analogInputs: Array<number> = []
-  for (let inputIdx = 0; inputIdx < info.numAnalogInputs; ++inputIdx) {
+  for (let inputIdx = 0; inputIdx < model.numAnalogInputs; ++inputIdx) {
     analogInputs.push(buf.readUInt16LE(pos))
     pos += 2
   }
-  const inputState: IronPiStateFromDevice = {
+  const inputState: DeviceInputState = {
     address,
     digitalInputs,
     digitalInputEventCounts,
     digitalOutputs,
     analogInputs,
   }
-  if (info.hasConnectButton) {
+  if (model.hasConnectButton) {
     const connectButtonState = buf.readUInt8(pos)
     inputState.connectButtonPressed = (connectButtonState & 0x80) !== 0
     inputState.connectButtonEventCount = connectButtonState & 0x7F

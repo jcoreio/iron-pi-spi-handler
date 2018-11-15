@@ -4,7 +4,7 @@
  * Messages addressed to a single device. One SPI transaction can contain many of these.
  */
 import {calcChecksum} from './checksum'
-import type {LEDMessage} from './ipcCodec'
+import type {LEDCommand} from '@jcoreio/iron-pi-ipc-codec'
 import {
   MSG_PER_DEVICE_PREAMBLE,
   MSG_PER_DEVICE_SET_LED,
@@ -70,8 +70,8 @@ const encodeColor = (color: string) => {
   }
 }
 
-export function encodeLEDMessagePerDevice(ledMessage: LEDMessage): MessagePerDeviceOpts {
-  const {address, colors, onTime, offTime, idleTime} = ledMessage
+export function encodeLEDCommandPerDevice(ledCommand: LEDCommand): MessagePerDeviceOpts {
+  const {address, colors, onTime, offTime, idleTime} = ledCommand
   const colorsFinal = colors.toLowerCase()
   let curColorIdx = -1
   let colorsArr = []

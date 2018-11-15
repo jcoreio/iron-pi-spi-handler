@@ -1,9 +1,9 @@
 // @flow
 
-import type {IronPiDeviceModel} from './ipcCodec'
+import type {DeviceModel} from '@jcoreio/iron-pi-ipc-codec'
 
-export const MODEL_INFO_CM8: IronPiDeviceModel = {
-  model: 'iron-pi-cm8',
+export const MODEL_INFO_CM8: DeviceModel = {
+  name: 'iron-pi-cm8',
   version: '1.0.0',
   numDigitalInputs: 8,
   numDigitalOutputs: 8,
@@ -11,8 +11,8 @@ export const MODEL_INFO_CM8: IronPiDeviceModel = {
   hasConnectButton: true,
 }
 
-export const MODEL_INFO_IO16: IronPiDeviceModel = {
-  model: 'iron-pi-io16',
+export const MODEL_INFO_IO16: DeviceModel = {
+  name: 'iron-pi-io16',
   version: '1.0.0',
   numDigitalInputs: 16,
   numDigitalOutputs: 16,
