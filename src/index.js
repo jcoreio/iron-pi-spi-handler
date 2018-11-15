@@ -1,6 +1,6 @@
 // @flow
 
-import {flatten, forOwn, range} from 'lodash'
+import {flatten, range} from 'lodash'
 import {MessageServer as IPCMessageServer} from 'socket-ipc'
 // $FlowFixMe: wiring-pi only installs on ARM / Linux
 import wpi from 'wiring-pi'
@@ -23,6 +23,8 @@ import {MODEL_INFO_CM8, MODEL_INFO_IO16, } from './modelInfo'
 import {deviceSPITransactionRequiredLen} from './spiProtocol'
 
 const codec = new IronPiIPCCodec()
+
+const POLL_INTERVAL = 100 // milliseconds
 
 const SPI_BAUD_RATE = 1000000 // 1MHz
 // const IRQ_PIN = 34
@@ -55,25 +57,39 @@ async function main(): Promise<void> {
   _ipcServer.on('error', err => console.error('ipc server error:', err))
   _ipcServer.start()
   console.log('started message server')
+
+  let flashCount = 0
+  while (true) { // eslint-disable-line no-constant-condition
+    const pollBegin = Date.now()
+    if (++flashCount >= 10) { // blink once per second
+      _flashLEDs = true
+      flashCount = 0
+    }
+    _requestInputStates = true
+    await serviceBusLoop()
+    const elapsed = Date.now() - pollBegin
+    const sleepTime = Math.max(POLL_INTERVAL - elapsed, 10)
+    await new Promise(resolve => setTimeout(resolve, sleepTime))
+  }
 }
 
 async function serviceBus(opts: {detect?: ?boolean} = {}): Promise<void> {
   const {detect} = opts
+
   const perDeviceMessages: Array<MessagePerDeviceOpts> = _ledMessagesToDevices.map(encodeLEDCommandPerDevice)
   _ledMessagesToDevices = []
 
-  forOwn(_outputsToDevices, (outputLevels: Array<boolean>, strAddress: string) => {
-    const address = parseInt(strAddress)
+  for (const deviceOutputState: DeviceOutputState of _outputsToDevices) {
+    const {address, levels} = deviceOutputState
     const device: ?DetectedDevice = _modelsByAddress.get(address)
     if (device) {
       perDeviceMessages.push(encodeDeviceOutputs({
         address,
         numOutputs: device.model.numDigitalOutputs,
-        outputLevels,
+        outputLevels: levels
       }))
     }
-  })
-  _outputsToDevices = []
+  }
 
   const devices: Array<DetectedDevice> = detect ? ALL_POSSIBLE_DEVICES : _detectedDevices
   const requestInputStates = detect || _requestInputStates
@@ -177,8 +193,6 @@ function onIPCConnection(connection: Object) {
     connection.send(_devicesListMessage)
 }
 
-let _flashCount = 0
-
 function onIPCMessage(event: Object) {
   const buf: Buffer = event.data
   try {
@@ -186,10 +200,6 @@ function onIPCMessage(event: Object) {
     const {setOutputs, setLEDs} = msg
     if (setOutputs) {
       _outputsToDevices = setOutputs.outputs
-      _flashLEDs = ++_flashCount >= 10
-      if (_flashLEDs)
-        _flashCount = 0
-      _requestInputStates = true
       serviceBusAsync()
     }
     if (setLEDs) {
