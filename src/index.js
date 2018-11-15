@@ -98,7 +98,7 @@ async function serviceBus(opts: {detect?: ?boolean} = {}): Promise<void> {
   const initialMessage: Buffer = encodeMessageToDevice({
     curAddress: 0,
     nextAddress: requestInputStates && devices.length ? devices[0].address : 0,
-    requestInputStates: detect || _requestInputStates,
+    requestInputStates,
     flashLEDs: _flashLEDs,
     perDeviceMessages,
   })
