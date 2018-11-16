@@ -26,7 +26,7 @@ export function decodeDeviceInputState({device, buf, detect}: {
   buf: Buffer,
   detect?: ?boolean,
 }): DeviceInputState {
-  const {address, model} = device
+  const {address, ioOffset, model} = device
   // Discard one dummy byte
   buf = buf.slice(1)
   if (buf.length < MESSAGE_FROM_DEVICE_OVERHEAD)
@@ -75,6 +75,7 @@ export function decodeDeviceInputState({device, buf, detect}: {
   }
   const inputState: DeviceInputState = {
     address,
+    ioOffset,
     digitalInputs,
     digitalInputEventCounts,
     digitalOutputs,

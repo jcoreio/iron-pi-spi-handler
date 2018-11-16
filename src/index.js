@@ -4,7 +4,7 @@ import {flatten, range} from 'lodash'
 import {MessageServer as IPCMessageServer} from 'socket-ipc'
 // $FlowFixMe: wiring-pi only installs on ARM / Linux
 import wpi from 'wiring-pi'
-import IronPiIPCCodec from '@jcoreio/iron-pi-ipc-codec'
+import IronPiIPCCodec, {UNIX_SOCKET_PATH} from '@jcoreio/iron-pi-ipc-codec'
 import type {
   DetectedDevice,
   DeviceInputState,
@@ -29,15 +29,28 @@ const POLL_INTERVAL = 100 // milliseconds
 const SPI_BAUD_RATE = 1000000 // 1MHz
 // const IRQ_PIN = 34
 
-const ALL_POSSIBLE_DEVICES: Array<DetectedDevice> = flatten([
+const allPossibleDevices: Array<DeviceModel> = flatten([
   MODEL_INFO_CM8,
   range(4).map(() => MODEL_INFO_IO16)
-]).map((model: DeviceModel, idx: number) => ({ address: idx + 1, model }))
+])
+// Loop through devices to calculate the I/O offset of each device
+const ALL_POSSIBLE_DEVICES: Array<DetectedDevice> = []
+let ioOffset = 0
+for (let deviceIdx = 0; deviceIdx < allPossibleDevices.length; ++deviceIdx) {
+  const model: DeviceModel = allPossibleDevices[deviceIdx]
+  ALL_POSSIBLE_DEVICES.push({
+    address: deviceIdx + 1,
+    ioOffset,
+    model,
+  })
+  const {numAnalogInputs, numDigitalInputs, numDigitalOutputs} = model
+  ioOffset += Math.max(numAnalogInputs, numDigitalInputs, numDigitalOutputs)
+}
 
 const _modelsByAddress: Map<number, DetectedDevice> = new Map()
 ALL_POSSIBLE_DEVICES.forEach((device: DetectedDevice) => _modelsByAddress.set(device.address, device))
 
-const _ipcServer = new IPCMessageServer('/tmp/socket-iron-pi', { binary: true })
+const _ipcServer = new IPCMessageServer(UNIX_SOCKET_PATH, { binary: true })
 
 let _devicesListMessage: ?Buffer
 let _detectedDevices: Array<DetectedDevice> = []
@@ -193,7 +206,7 @@ function onIPCConnection(connection: Object) {
     connection.send(_devicesListMessage)
 }
 
-function onIPCMessage(event: Object) {
+function onIPCMessage(event: {data: Buffer}) {
   const buf: Buffer = event.data
   try {
     const msg: MessageToDriver = codec.decodeMessageToDriver(buf)
