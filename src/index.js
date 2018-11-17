@@ -56,7 +56,7 @@ let _devicesListMessage: ?Buffer
 let _detectedDevices: Array<DetectedDevice> = []
 
 let _ledMessagesToDevices: Array<LEDCommand> = []
-let _outputsToDevices: Array<DeviceOutputState> = []
+let _outputsToDevices: Map<number, DeviceOutputState> = new Map()
 let _requestInputStates: boolean = false
 let _flashLEDs: boolean = false
 
@@ -92,7 +92,7 @@ async function serviceBus(opts: {detect?: ?boolean} = {}): Promise<void> {
   const perDeviceMessages: Array<MessagePerDeviceOpts> = _ledMessagesToDevices.map(encodeLEDCommandPerDevice)
   _ledMessagesToDevices = []
 
-  for (const deviceOutputState: DeviceOutputState of _outputsToDevices) {
+  for (const deviceOutputState: DeviceOutputState of _outputsToDevices.values()) {
     const {address, levels} = deviceOutputState
     const device: ?DetectedDevice = _modelsByAddress.get(address)
     if (device) {
@@ -213,10 +213,15 @@ function onIPCMessage(event: {data: Buffer}) {
     const {setOutputs, setLEDs} = msg
     if (setOutputs) {
       const {outputs} = setOutputs
-      if (outputs && !isEqual(outputs, _outputsToDevices)) {
-        _outputsToDevices = outputs
-        serviceBusAsync()
+      let anyOutputsChanged = false
+      for (let deviceOutputs: DeviceOutputState of (outputs || [])) {
+        if (!isEqual(deviceOutputs, _outputsToDevices.get(deviceOutputs.address))) {
+          _outputsToDevices.set(deviceOutputs.address, deviceOutputs)
+          anyOutputsChanged = true
+        }
       }
+      if (anyOutputsChanged)
+        serviceBusAsync()
     }
     if (setLEDs) {
       _ledMessagesToDevices = setLEDs.leds
