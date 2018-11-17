@@ -1,6 +1,6 @@
 // @flow
 
-import {flatten, range} from 'lodash'
+import {flatten, isEqual, range} from 'lodash'
 import {MessageServer as IPCMessageServer} from 'socket-ipc'
 // $FlowFixMe: wiring-pi only installs on ARM / Linux
 import wpi from 'wiring-pi'
@@ -212,8 +212,11 @@ function onIPCMessage(event: {data: Buffer}) {
     const msg: MessageToDriver = codec.decodeMessageToDriver(buf)
     const {setOutputs, setLEDs} = msg
     if (setOutputs) {
-      _outputsToDevices = setOutputs.outputs
-      serviceBusAsync()
+      const {outputs} = setOutputs
+      if (outputs && !isEqual(outputs, _outputsToDevices)) {
+        _outputsToDevices = outputs
+        serviceBusAsync()
+      }
     }
     if (setLEDs) {
       _ledMessagesToDevices = setLEDs.leds
