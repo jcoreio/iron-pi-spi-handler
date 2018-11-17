@@ -4,7 +4,12 @@ import assert from 'assert'
 
 import type {DetectedDevice, DeviceInputState} from '@jcoreio/iron-pi-ipc-codec'
 import {deviceInputStatePayloadLen, MSG_FROM_DEVICE_INPUT_STATE, MSG_FROM_DEVICE_PREAMBLE, MESSAGE_FROM_DEVICE_OVERHEAD} from './spiProtocol'
-import {calcChecksum} from "./checksum"
+import {calcChecksum} from './checksum'
+
+const COUNTS_TO_VOLTS_SLOPE = 0.0001570585
+const COUNTS_TO_VOLTS_OFFSET = -0.124076182
+
+const countsToVolts = (counts: number) => Math.max(0, (counts * COUNTS_TO_VOLTS_SLOPE) + COUNTS_TO_VOLTS_OFFSET)
 
 function decodeBits({buf, pos, count}: {buf: Buffer, pos: number, count: number}): Array<boolean> {
   const numBytes = Math.ceil(count / 8)
@@ -70,7 +75,7 @@ export function decodeDeviceInputState({device, buf, detect}: {
   }
   const analogInputs: Array<number> = []
   for (let inputIdx = 0; inputIdx < model.numAnalogInputs; ++inputIdx) {
-    analogInputs.push(buf.readUInt16LE(pos))
+    analogInputs.push(countsToVolts(buf.readUInt16LE(pos)))
     pos += 2
   }
   const inputState: DeviceInputState = {
