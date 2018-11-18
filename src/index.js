@@ -89,7 +89,7 @@ async function main(): Promise<void> {
 async function serviceBus(opts: {detect?: ?boolean} = {}): Promise<void> {
   const {detect} = opts
 
-  const perDeviceMessages: Array<MessagePerDeviceOpts> = _ledMessagesToDevices.map(encodeLEDCommandPerDevice)
+  const perDeviceMessages: Array<MessagePerDeviceOpts> = compact(_ledMessagesToDevices.map(encodeLEDCommandPerDevice))
   _ledMessagesToDevices = []
 
   for (const deviceOutputState: DeviceOutputState of _outputsToDevices.values()) {

@@ -70,9 +70,10 @@ const encodeColor = (color: string) => {
   }
 }
 
-export function encodeLEDCommandPerDevice(ledCommand: LEDCommand): MessagePerDeviceOpts {
-  const {address, colors, onTime, offTime} = ledCommand
+export function encodeLEDCommandPerDevice(ledCommand: LEDCommand): ?MessagePerDeviceOpts {
+  const {address, colors, onTime, offTime, idleTime} = ledCommand
   const colorsFinal = colors.toLowerCase()
+  if (!colorsFinal) return null
   let curColorIdx = -1
   let colorsArr = []
   let countsArr = []
@@ -94,9 +95,11 @@ export function encodeLEDCommandPerDevice(ledCommand: LEDCommand): MessagePerDev
   buf.writeUInt8(countsArr[0] || 0, pos++)
   buf.writeUInt8(colorsArr[1] || 0, pos++)
   buf.writeUInt8(countsArr[1] || 0, pos++)
-  buf.writeUInt16LE(onTime, pos)
+  buf.writeUInt16LE(onTime || 500, pos)
   pos += 2
-  buf.writeUInt16LE(offTime, pos)
+  buf.writeUInt16LE(offTime || onTime || 500, pos)
+  pos += 2
+  buf.writeUInt32LE((idleTime == null ? 2000 : idleTime) || 0, pos)
   return {address, cmd: MSG_PER_DEVICE_SET_LED, payload: buf}
 }
 
