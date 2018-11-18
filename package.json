@@ -22,13 +22,15 @@
     "flow:watch": "flow-watch -e js,js.flow,flowconfig --ignore node_modules/ --watch .flowconfig --watch src/ --watch test/",
     "clean": "rimraf lib",
     "build": "npm run clean && babel src --out-dir lib && flow-copy-source -v src/ lib",
-    "test": "NODE_ENV=production BABEL_ENV=es5 mocha $npm_package_config_mocha && NODE_ENV=production BABEL_ENV=coverage nyc --reporter=lcov --reporter=text mocha $npm_package_config_mocha",
+    "test": "NODE_ENV=production BABEL_ENV=es5 mocha $npm_package_config_mocha",
+    "coverage": "NODE_ENV=production BABEL_ENV=coverage nyc --reporter=lcov --reporter=text mocha $npm_package_config_mocha",
     "test:watch": "NODE_ENV=production BABEL_ENV=test mocha --watch $npm_package_config_mocha",
     "codecov": "nyc report --reporter=text-lcov > coverage.lcov; codecov",
     "commitmsg": "commitlint -e $GIT_PARAMS",
     "precommit": "npm run lint && flow",
     "prepublishOnly": "npm run clean && npm run lint && flow && npm test && npm run build",
     "open:coverage": "open coverage/lcov-report/index.html",
+    "sync": "npm run build && rsync -r lib package.json yarn.lock pi:/opt/iron-pi-spi-handler",
     "semantic-release": "semantic-release"
   },
   "config": {
@@ -100,7 +102,10 @@
   "dependencies": {
     "@jcoreio/iron-pi-ipc-codec": "^3.0.0",
     "lodash": "^4.17.11",
-    "socket-ipc": "^1.0.0",
+    "log4jcore": "^2.0.3",
+    "socket-ipc": "^1.0.0"
+  },
+  "optionalDependencies": {
     "wiring-pi": "jcoreio/WiringPi-Node#v2.2.2"
   },
   "publishConfig": {

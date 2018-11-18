@@ -1,6 +1,7 @@
 // @flow
 
-import {flatten, isEqual, range} from 'lodash'
+import {compact, flatten, isEqual, range} from 'lodash'
+import logger from 'log4jcore'
 import {MessageServer as IPCMessageServer} from 'socket-ipc'
 // $FlowFixMe: wiring-pi only installs on ARM / Linux
 import wpi from 'wiring-pi'
@@ -22,7 +23,11 @@ import {decodeDeviceInputState} from './messageFromDevice'
 import {MODEL_INFO_CM8, MODEL_INFO_IO16, } from './modelInfo'
 import {deviceSPITransactionRequiredLen} from './spiProtocol'
 
+const log = logger('iron-pi-spi-handler')
+
 const codec = new IronPiIPCCodec()
+
+const MESSAGE_MIN_GAP = 3 // minimum time, in milliseconds, between the end of one SPI transaction and the beginning of the next one
 
 const POLL_INTERVAL = 100 // milliseconds
 
@@ -67,14 +72,14 @@ async function main(): Promise<void> {
 
   _ipcServer.on('message', onIPCMessage)
   _ipcServer.on('connection', onIPCConnection)
-  _ipcServer.on('error', err => console.error('ipc server error:', err))
+  _ipcServer.on('error', err => log.error('ipc server error:', err))
   _ipcServer.start()
-  console.log('started message server')
+  log.info('started message server')
 
   let flashCount = 0
   while (true) { // eslint-disable-line no-constant-condition
     const pollBegin = Date.now()
-    if (++flashCount >= 10) { // blink once per second
+    if (++flashCount >= 20) { // blink once per second
       _flashLEDs = true
       flashCount = 0
     }
@@ -136,7 +141,7 @@ async function serviceBus(opts: {detect?: ?boolean} = {}): Promise<void> {
         deviceInputStates.push(decodeDeviceInputState({device, buf: response, detect}))
       } catch (err) {
         if (!detect)
-          console.error(`could not decode response from device ${address}: ${err.message}`)
+          log.info(`could not decode response from device ${address}: ${err.message}\nresponse:`, response)
       }
     }
   }
@@ -144,7 +149,7 @@ async function serviceBus(opts: {detect?: ?boolean} = {}): Promise<void> {
   if (detect) {
     _detectedDevices = ALL_POSSIBLE_DEVICES.filter(device =>
       deviceInputStates.find((state: DeviceInputState) => state.address === device.address))
-    console.log(`detected devices:${_detectedDevices.map((device: DetectedDevice) => `\n  ${device.address}: ${device.model.name}`).join('')}`)
+    log.info(`detected devices:${_detectedDevices.map((device: DetectedDevice) => `\n  ${device.address}: ${device.model.name}`).join('')}`)
   } else if (deviceInputStates.length) {
     _ipcServer.send(codec.encodeDeviceInputStates({inputStates: deviceInputStates}))
   }
@@ -154,7 +159,7 @@ let _lastMessageTime: number = 0
 
 async function doSPITransaction(buf: Buffer): Promise<Buffer> {
   const elapsedSinceLastMessage = Date.now() - _lastMessageTime
-  const waitTime = 2 - elapsedSinceLastMessage
+  const waitTime = MESSAGE_MIN_GAP - elapsedSinceLastMessage
   if (waitTime > 0)
     await new Promise(resolve => setTimeout(resolve, waitTime))
 
@@ -188,7 +193,7 @@ async function serviceBusLoop(): Promise<void> {
 
 function serviceBusAsync() {
   serviceBusLoop()
-    .catch(err => console.error('caught error in ensureBusServiced:', err))
+    .catch(err => log.error('caught error in ensureBusServiced:', err))
 }
 
 async function createDevicesListMessage(): Promise<Buffer> {
@@ -228,12 +233,12 @@ function onIPCMessage(event: {data: Buffer}) {
       serviceBusAsync()
     }
   } catch (err) {
-    console.error('error handling IPC message:', err)
+    log.error('error handling IPC message:', err)
   }
 }
 
 main()
   .catch((err: any) => {
-    console.error('unexpected error:', err)
+    log.error('unexpected error:', err)
     process.exit(1)
   })
