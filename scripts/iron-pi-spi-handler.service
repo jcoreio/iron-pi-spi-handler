@@ -1,0 +1,14 @@
+[Unit]
+Description=Iron Pi SPI Handler
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/node /opt/iron-pi-spi-handler/lib/index.js
+WorkingDirectory=/opt/iron-pi-spi-handler
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
