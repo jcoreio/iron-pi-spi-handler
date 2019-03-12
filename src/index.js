@@ -197,7 +197,17 @@ function serviceBusAsync() {
 }
 
 async function createDevicesListMessage(): Promise<Buffer> {
-  const { serialNumber, accessCode } = await readSerialNumberAndAccessCode()
+  let serialNumber, accessCode
+  try {
+    const result = await readSerialNumberAndAccessCode()
+    serialNumber = result.serialNumber
+    accessCode = result.accessCode
+  } catch (err) {
+    log.error("could not read hardware serial number and access code. Using empty serial number and access code of 'ABCDEFGH'")
+    serialNumber = ''
+    accessCode = 'ABCDEFGH'
+  }
+
   const hardwareInfo: HardwareInfo = {
     devices: _detectedDevices,
     serialNumber,
