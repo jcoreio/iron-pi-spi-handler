@@ -1,7 +1,8 @@
-coverage
+/build
+/coverage
+/dist
 .eslintcache
 .idea
 .nyc_output
-lib
-**/node_modules
-package-lock.json
+/lib
+node_modules

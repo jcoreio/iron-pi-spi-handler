@@ -1,6 +1,6 @@
 {
   "name": "@jcoreio/iron-pi-spi-handler",
-  "version": "0.0.0-development",
+  "version": "1.0.0",
   "description": "Handles SPI communications on the Iron Pi and exposes a UNIX sockets interface for iron-pi-device-client",
   "engines": {
     "node": ">=8.0.0"
@@ -21,7 +21,8 @@
     "flow:coverage": "for file in src/**.js test/**.js; do echo $file; flow coverage $file; done",
     "flow:watch": "flow-watch -e js,js.flow,flowconfig --ignore node_modules/ --watch .flowconfig --watch src/ --watch test/",
     "clean": "rimraf lib",
-    "build": "npm run clean && babel src --out-dir lib && flow-copy-source -v src/ lib",
+    "check": "npm run lint && npm run flow",
+    "build": "npm run clean && babel src --out-dir lib && node scripts/bundle",
     "test": "NODE_ENV=production BABEL_ENV=es5 mocha $npm_package_config_mocha",
     "coverage": "NODE_ENV=production BABEL_ENV=coverage nyc --reporter=lcov --reporter=text mocha $npm_package_config_mocha",
     "test:watch": "NODE_ENV=production BABEL_ENV=test mocha --watch $npm_package_config_mocha",
@@ -65,6 +66,7 @@
   "devDependencies": {
     "@commitlint/cli": "^6.0.2",
     "@commitlint/config-conventional": "^6.0.2",
+    "@jcoreio/tar-bundler": "^1.0.0",
     "@jedwards1211/commitlint-config": "^1.0.0",
     "@jedwards1211/eslint-config": "^2.0.0",
     "@jedwards1211/eslint-config-flow": "^1.0.0",
@@ -92,17 +94,19 @@
     "flow-bin": "^0.83.0",
     "flow-copy-source": "^1.2.1",
     "flow-watch": "^1.1.0",
+    "fs-extra": "^8.1.0",
     "husky": "^0.14.3",
     "istanbul": "^0.4.5",
     "mocha": "^4.1.0",
     "nyc": "^11.4.1",
+    "promisify-child-process": "^3.1.0",
     "rimraf": "^2.6.0",
     "semantic-release": "^15.10.6"
   },
   "dependencies": {
     "@jcoreio/iron-pi-ipc-codec": "^3.0.0",
     "lodash": "^4.17.11",
-    "log4jcore": "^2.0.3",
+    "log4jcore": "^3.0.1",
     "socket-ipc": "^1.0.0"
   },
   "optionalDependencies": {
