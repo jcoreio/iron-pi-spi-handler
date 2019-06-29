@@ -1,6 +1,6 @@
 {
   "name": "@jcoreio/iron-pi-spi-handler",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Handles SPI communications on the Iron Pi and exposes a UNIX sockets interface for iron-pi-device-client",
   "engines": {
     "node": ">=8.0.0"
@@ -110,7 +110,7 @@
     "socket-ipc": "^1.0.0"
   },
   "optionalDependencies": {
-    "wiring-pi": "jcoreio/WiringPi-Node#v2.2.2"
+    "wiring-pi": "jcoreio/WiringPi-Node#v2.2.3"
   },
   "publishConfig": {
     "access": "public"
