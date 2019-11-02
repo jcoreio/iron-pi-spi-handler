@@ -105,7 +105,7 @@
   },
   "dependencies": {
     "@jcoreio/iron-pi-ipc-codec": "^3.0.0",
-    "lodash": "^4.17.11",
+    "lodash": "^4.17.13",
     "log4jcore": "^3.0.1",
     "socket-ipc": "^1.0.0"
   },
