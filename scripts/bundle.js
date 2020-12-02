@@ -1,7 +1,8 @@
 
 const path = require('path')
 
-const { copy, emptyDir, ensureDir } = require('fs-extra')
+const { copy, emptyDir, ensureDir, writeJson } = require('fs-extra')
+const { omit } = require('lodash')
 const { logger } = require('log4jcore')
 const { spawn } = require('promisify-child-process')
 const { bundle } = require('@jcoreio/tar-bundler')
@@ -18,8 +19,17 @@ const log = logger('iron-pi-spi-handler:bundle')
 async function run() {
   await emptyDir(bundleDir)
   await ensureDir(appBundleDir)
+
+  const packageJSON = require('../package.json')
+
+  log.info('writing modified package.json')
+  await writeJson(
+      path.join(appBundleDir, 'package.json'),
+      omit(packageJSON, 'devDependencies'),
+      { spaces: 2 }
+  )
   log.info('copying assets...')
-  for (const fileOrDir of ['lib', 'LICENSE', 'package.json', 'README.md', 'yarn.lock']) {
+  for (const fileOrDir of ['lib', 'LICENSE', 'README.md']) {
     await copy(path.join(rootDir, fileOrDir), path.join(appBundleDir, fileOrDir))
   }
   log.info('installing production dependencies...')
@@ -28,8 +38,8 @@ async function run() {
     stdio: 'inherit',
   })
 
-  const { version } = require('../package.json')
-  const archiveFile = `${APP_NAME}-v${version}.tar.bz2`
+
+  const archiveFile = `${APP_NAME}-v${packageJSON.version}.tar.bz2`
   const archiveFileRelative = `dist/${archiveFile}`
 
   log.info('creating dist dir...')
