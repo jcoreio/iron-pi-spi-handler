@@ -102,7 +102,7 @@
     "nyc": "^11.4.1",
     "promisify-child-process": "^3.1.0",
     "rimraf": "^2.6.0",
-    "semantic-release": "^15.10.6"
+    "semantic-release": "^17.2.3"
   },
   "dependencies": {
     "@jcoreio/iron-pi-ipc-codec": "^3.0.0",
