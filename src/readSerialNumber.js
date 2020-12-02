@@ -1,19 +1,19 @@
 // @flow
 
 import assert from 'assert'
-// $FlowFixMe: wiring-pi only installs on ARM / Linux
-import wpi from 'wiring-pi'
+// $FlowFixMe: @jcoreio/i2c does not install on Windows or Mac OS
+import I2C from '@jcoreio/i2c'
 
-const EEPROM_I2C_ADDR = 0x50
+export const SERIAL_NUMBER_LEN = 6
+export const SERIAL_NUMBER_TXN_LEN = SERIAL_NUMBER_LEN + 2
+export const ACCESS_CODE_LEN = 8
+export const ACCESS_CODE_TXN_LEN = ACCESS_CODE_LEN + 2
 
-const SERIAL_NUMBER_LEN = 6
-const ACCESS_CODE_LEN = 8
+export const SERIAL_NUMBER_OFFSET = 0
+export const SERIAL_NUMBER_PREAMBLE = 0xa9
 
-const SERIAL_NUMBER_PREAMBLE = 0xA9
-const ACCESS_CODE_PREAMBLE = 0x7C
-
-// Leave some extra space in case we ever want to store larger device IDs
-const ACCESS_CODE_OFFSET = 32
+export const ACCESS_CODE_OFFSET = 32
+export const ACCESS_CODE_PREAMBLE = 0x7c
 
 const pause = () => new Promise(resolve => setTimeout(resolve, 10))
 
@@ -23,39 +23,52 @@ export type SerialNumberAndAccessCode = {
 }
 
 export async function readSerialNumberAndAccessCode(): Promise<SerialNumberAndAccessCode> {
-  const fd = wpi.wiringPiI2CSetup(EEPROM_I2C_ADDR)
+  const i2c: I2C = new I2C({ device: '/dev/i2c-1', address: 0x50 })
 
-  async function readByte(pos: number): Promise<number> {
-    await pause()
-    return wpi.wiringPiI2CReadReg8(fd, pos)
-  }
+  const serialNumberResponse = await i2c.read(
+      SERIAL_NUMBER_OFFSET,
+      SERIAL_NUMBER_TXN_LEN
+  )
 
-  let pos = 0
-  const serialNumberPreamble = await readByte(pos++)
-  const serialNumberLen = await readByte(pos++)
+  const serialNumberPreamble = serialNumberResponse[0]
+  const serialNumberLength = serialNumberResponse[1]
+  const serialNumber = serialNumberResponse.slice(2).toString()
 
-  const serialNumberCharCodes = []
-  for (let strPos = 0; strPos < SERIAL_NUMBER_LEN; ++strPos) {
-    serialNumberCharCodes[strPos] = await readByte(pos++)
-  }
-  const serialNumber = String.fromCharCode(...serialNumberCharCodes)
 
-  pos = ACCESS_CODE_OFFSET
-  const accessCodePreamble = await readByte(pos++)
-  const accessCodeLength = await readByte(pos++)
+  await pause()
 
-  const accessCodeCharCodes = []
-  for (let strPos = 0; strPos < ACCESS_CODE_LEN; ++strPos) {
-    accessCodeCharCodes[strPos] = await readByte(pos++)
-  }
-  const accessCode = String.fromCharCode(...accessCodeCharCodes)
+  const accessCodeResponse = await i2c.read(
+      ACCESS_CODE_OFFSET,
+      ACCESS_CODE_TXN_LEN
+  )
 
-  assert.strictEqual(serialNumberPreamble, SERIAL_NUMBER_PREAMBLE, 'Serial Number preamble did not match')
-  assert.strictEqual(serialNumberLen, SERIAL_NUMBER_LEN, 'Serial Number length did not match')
+  const accessCodePreamble = accessCodeResponse[0]
+  const accessCodeLength = accessCodeResponse[1]
+  const accessCode = accessCodeResponse.slice(2).toString()
 
-  assert.strictEqual(accessCodePreamble, ACCESS_CODE_PREAMBLE, 'Access code preamble did not match')
-  assert.strictEqual(accessCodeLength, ACCESS_CODE_LEN, 'Access code length did not match')
+  assert.strictEqual(
+      serialNumberPreamble,
+      SERIAL_NUMBER_PREAMBLE,
+      'Device ID preamble did not match'
+  )
+  assert.strictEqual(
+      serialNumberLength,
+      SERIAL_NUMBER_LEN,
+      'Device ID length did not match'
+  )
 
-  console.log(`Serial Number: ${serialNumber} Access Code: ${accessCode}`) // eslint-disable-line no-console
+  assert.strictEqual(
+      accessCodePreamble,
+      ACCESS_CODE_PREAMBLE,
+      'Access code preamble did not match'
+  )
+  assert.strictEqual(
+      accessCodeLength,
+      ACCESS_CODE_LEN,
+      'Access code length did not match'
+  )
+
+  // eslint-disable-next-line no-console
+  console.log(`Serial Number: ${serialNumber} Access Code: ${accessCode}`)
   return { serialNumber, accessCode }
 }

@@ -1,10 +1,11 @@
 // @flow
 
+import { promisify } from 'util'
 import {compact, flatten, isEqual, range} from 'lodash'
 import logger from 'log4jcore'
 import {MessageServer as IPCMessageServer} from 'socket-ipc'
-// $FlowFixMe: wiring-pi only installs on ARM / Linux
-import wpi from 'wiring-pi'
+// @FlowFixMe: spi-device does not install on Mac OS or Windows
+import { open as openSPIDevice } from 'spi-device'
 import IronPiIPCCodec, {UNIX_SOCKET_PATH} from '@jcoreio/iron-pi-ipc-codec'
 import type {
   DetectedDevice,
@@ -65,8 +66,20 @@ let _outputsToDevices: Map<number, DeviceOutputState> = new Map()
 let _requestInputStates: boolean = false
 let _flashLEDs: boolean = false
 
+let spiTransfer
+
 async function main(): Promise<void> {
-  wpi.wiringPiSPISetup(0, SPI_BAUD_RATE)
+  // We can't just promisify openSPIDevice, since openSPIDevice returns the connection
+  // handle immediately, whereas promisify would expect the connection handle to be
+  // the 2nd argument to the callback
+  const spi = await new Promise((resolve: (any) => void, reject: (Error) => void) => {
+    const _spi = openSPIDevice(0, 0, (err: Error | null) => {
+      if (err) reject(err)
+      else resolve(_spi)
+    })
+  })
+  spiTransfer = promisify(spi.transfer.bind(spi))
+
   await serviceBus({detect: true})
   _devicesListMessage = await createDevicesListMessage()
 
@@ -139,9 +152,12 @@ async function serviceBus(opts: {detect?: ?boolean} = {}): Promise<void> {
       const response: Buffer = await doSPITransaction(deviceRequestMessage)
       try {
         deviceInputStates.push(decodeDeviceInputState({device, buf: response, detect}))
+        log.trace('successfully decoded response from device', address, response)
       } catch (err) {
-        if (!detect)
-          log.info(`could not decode response from device ${address}: ${err.message}\nresponse:`, response)
+        if (detect)
+          log.debug(`device ${address} appears to not be present. response:`, response)
+        else
+          log.error(`could not decode response from device ${address}: ${err.message}\nresponse:`, response)
       }
     }
   }
@@ -163,10 +179,16 @@ async function doSPITransaction(buf: Buffer): Promise<Buffer> {
   if (waitTime > 0)
     await new Promise(resolve => setTimeout(resolve, waitTime))
 
-  wpi.wiringPiSPIDataRW(0, buf)
-
+  const receiveBuffer = Buffer.alloc(buf.length)
+  if (!spiTransfer) throw Error('unexpected missing promisified spiTransfer function')
+  await spiTransfer([{
+    sendBuffer: buf,
+    receiveBuffer,
+    byteLength: buf.length,
+    speedHz: SPI_BAUD_RATE,
+  }])
   _lastMessageTime = Date.now()
-  return buf
+  return receiveBuffer
 }
 
 let _serviceBusRepeat = false
